@@ -1,9 +1,6 @@
 <html><body>
 <h2>Sequential Fourm</h2>
-<p>Librarian for the Sequential Fourm synthesizer.</p>
-
-<p>This editor provides librarian support only — patch browsing, downloading, uploading,
-and file saving/loading. It does not yet provide a graphical patch editor.</p>
+<p>Patch editor and librarian for the Sequential Fourm synthesizer.</p>
 
 <h3>Banks</h3>
 <p>The Fourm has 4 banks of 128 patches each:</p>
@@ -14,13 +11,33 @@ and file saving/loading. It does not yet provide a graphical patch editor.</p>
   <li><b>F2</b> – Factory Bank 2 (read-only)</li>
 </ul>
 
+<h3>Tabs</h3>
+<ul>
+  <li><b>Global</b> – Patch name, category, scale, transpose, clock, pitch bend</li>
+  <li><b>Oscillators</b> – Osc 1 and 2 waveforms, mix, feedback, noise, glide</li>
+  <li><b>Filter</b> – Cutoff, resonance, key tracking, filter envelope</li>
+  <li><b>Envelope + LFO</b> – Amp envelope and LFO parameters</li>
+  <li><b>Modulation</b> – Mod source routing and destination assignments</li>
+  <li><b>Arp / Voice</b> – Arpeggiator, sequencer controls, unison, key mode</li>
+</ul>
+
+<h3>Sequencer</h3>
+<p>Sequencer step data (4 tracks &times; 64 steps, rest/tie/glide flags) is preserved
+across save/load and synth upload/download, but step-level editing is not yet implemented.
+Use the Fourm's front panel to program sequences; the editor will faithfully store and
+restore them.</p>
+
+<h3>Notes on Display Values</h3>
+<p>Some parameter display values (LFO shape, scale names, category names) are approximations
+based on the MIDI implementation document. Verify against the Fourm's front panel.</p>
+
 <h3>SysEx</h3>
 <ul>
   <li>Manufacturer ID: 0x01 (Sequential)</li>
   <li>Device ID: 0x3B (Fourm)</li>
-  <li>Program Dump: F0 01 3B 02 &lt;bank&gt; &lt;prog&gt; &lt;data&gt; F7</li>
-  <li>Edit Buffer: F0 01 3B 03 &lt;data&gt; F7</li>
+  <li>Program Dump: F0 01 3B 02 &lt;bank&gt; &lt;prog&gt; &lt;4690 packed bytes&gt; F7</li>
+  <li>Edit Buffer: F0 01 3B 03 &lt;4690 packed bytes&gt; F7</li>
 </ul>
 
-<p><b>MIDI SysEx</b> must be enabled in the Fourm's globals for patch dumps to work.</p>
+<p><b>MIDI SysEx</b> must be enabled in the Fourm's globals (SysX = On, SysX Port = USB or MIDI).</p>
 </body></html>
