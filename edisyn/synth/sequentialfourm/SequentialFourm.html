@@ -1,0 +1,26 @@
+<html><body>
+<h2>Sequential Fourm</h2>
+<p>Librarian for the Sequential Fourm synthesizer.</p>
+
+<p>This editor provides librarian support only — patch browsing, downloading, uploading,
+and file saving/loading. It does not yet provide a graphical patch editor.</p>
+
+<h3>Banks</h3>
+<p>The Fourm has 4 banks of 128 patches each:</p>
+<ul>
+  <li><b>U1</b> – User Bank 1 (writable)</li>
+  <li><b>U2</b> – User Bank 2 (writable)</li>
+  <li><b>F1</b> – Factory Bank 1 (read-only)</li>
+  <li><b>F2</b> – Factory Bank 2 (read-only)</li>
+</ul>
+
+<h3>SysEx</h3>
+<ul>
+  <li>Manufacturer ID: 0x01 (Sequential)</li>
+  <li>Device ID: 0x3B (Fourm)</li>
+  <li>Program Dump: F0 01 3B 02 &lt;bank&gt; &lt;prog&gt; &lt;data&gt; F7</li>
+  <li>Edit Buffer: F0 01 3B 03 &lt;data&gt; F7</li>
+</ul>
+
+<p><b>MIDI SysEx</b> must be enabled in the Fourm's globals for patch dumps to work.</p>
+</body></html>
