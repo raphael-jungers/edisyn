@@ -1,3 +1,8 @@
+/***
+    Copyright 2026 by Raphaël Jungers
+    Licensed under the Apache License version 2.0
+*/
+
 /**
    Recognizer for the Sequential Fourm synthesizer.
 */

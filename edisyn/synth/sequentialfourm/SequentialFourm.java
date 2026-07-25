@@ -1,3 +1,8 @@
+/***
+    Copyright 2026 by Raphaël Jungers
+    Licensed under the Apache License version 2.0
+*/
+
 /**
    Patch editor and librarian for the Sequential Fourm synthesizer.
 
@@ -12,7 +17,9 @@
 
    NRPN# = byte_offset + 1. Name offset 88 (bytes 88-107) verified with hardware.
    Multi-byte params: osc1freq/osc2freq (0-1400, bytes 2+3 and 4+5),
-   filtercutoff (0-1023, bytes 26+27).
+   filtercutoff (0-1023, bytes 26+27). Big-endian (first byte is high byte) --
+   verified against a real hardware bulk dump (Sequential-Fourm.bulk.syx);
+   the little-endian reading put every real patch's value out of range.
 */
 
 package edisyn.synth.sequentialfourm;
@@ -42,21 +49,25 @@ public class SequentialFourm extends Synth
     static final String[] GLIDE_MODES = { "Fixed Rate", "Fixed Rate A", "Fixed Time", "Fixed Time A" };
     static final String[] KEY_MODES = { "Poly", "Mono", "Unison" };
     static final String[] NOISE_TYPES = { "White", "Pink", "Digital", "Red" };
-    static final String[] LFO_SH_TYPES = { "Track", "Sample", "Hold", "Free", "Noise", "S/H" };
+    static final String[] LFO_SH_TYPES = { "S/H", "Random", "Pink", "White", "Violet", "DC" };
     static final String[] MOD_SRC_ROUTES = { "Off", "Pos", "Full" };
     static final String[] MOD_DST_SRCS = { "Off", "Filter Env", "Osc B", "LFO" };
     static final String[] AT_DESTS = { "Off", "Filter", "Amp", "LFO" };
-    static final String[] ARP_MODES = { "Up", "Down", "Up/Down", "Assign 1", "Assign 2", "Random", "Chord", "Order" };
+    static final String[] ARP_MODES = { "Up", "Down", "Up+Down1", "Up+Down2", "Random", "Assign", "Seq Note", "Seq Mod" };
     static final String[] ARP_RANGES = { "1 Oct", "2 Oct", "3 Oct" };
-    static final String[] ARP_REPEATS = { "1", "2", "3", "4" };
-    static final String[] SEQ_PLAY_MODES = { "Normal", "No Reset", "Tag", "Record" };
-    static final String[] SEQ_MOD_DESTS = { "None", "Osc 1", "Osc 2", "Osc 1+2", "PW 1", "PW 2", "Filter" };
+    static final String[] ARP_REPEATS = { "Off", "1", "2", "3" };
+    static final String[] SEQ_PLAY_MODES = { "Retrig", "Continue", "One Shot", "Step" };
+    static final String[] SEQ_MOD_DESTS = { "Osc Freq A", "Osc Freq B", "Filter Cutoff", "MOD 1 Amt",
+        "MOD 2 Amt", "MOD 3 Amt", "LFO Freq", "Pulse Width A", "Pulse Width B", "Pulse Width All", "Feedback" };
     static final String[] CLOCK_DIVS = { "32nd", "16th", "8th", "8th Trip", "Quarter", "Qtr Trip",
         "Half", "Half Trip", "Whole", "Dot 8th", "Dot Qtr" };
-    static final String[] CATEGORIES = { "None", "Arp/Seq", "Bass", "Bell", "Chord", "FX", "Lead",
-        "Organ", "Pad", "Perc", "Poly", "Synth", "Vox", "Wind", "Classic", "Sequence", "Init" };
+    static final String[] CATEGORIES = { "Misc", "Pad", "Lead", "Bass", "Poly", "Keys", "String",
+        "Pluck", "Bell", "Arp", "Brass", "Voice", "Organ", "Percussion", "Tuned Percussion", "SFX" };
+    static final String[] NOTES = { "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
 
     // ---- Parameter table: index = NRPN# - 1 = byte offset in unpacked dump ----
+    // A few entries deviate from the MIDI doc's NRPN order or pack the value into
+    // partial bits; see FOURM.md in this directory for the full list.
 
     static final String[] PARAMETERS;
     static final HashMap<String, Integer> PARAMETERS_MAP = new HashMap<>();
@@ -67,8 +78,8 @@ public class SequentialFourm extends Synth
 
         PARAMETERS[0]  = "osc1octave";
         PARAMETERS[1]  = "osc2octave";
-        PARAMETERS[2]  = "osc1freq";        // 0-1400, 2-byte: high bits in PARAMETERS[3]
-        PARAMETERS[4]  = "osc2freq";        // 0-1400, 2-byte: high bits in PARAMETERS[5]
+        PARAMETERS[2]  = "osc1freq";        // 0-1400, 2-byte big-endian: low bits in PARAMETERS[3]
+        PARAMETERS[4]  = "osc2freq";        // 0-1400, 2-byte big-endian: low bits in PARAMETERS[5]
         PARAMETERS[6]  = "osc1sync";
         PARAMETERS[7]  = "osc2tri";
         PARAMETERS[8]  = "osc1saw";
@@ -79,19 +90,19 @@ public class SequentialFourm extends Synth
         PARAMETERS[13] = "osc2pw";
         PARAMETERS[14] = "osc1level";
         PARAMETERS[15] = "osc2level";
-        PARAMETERS[16] = "feedbackon";
-        PARAMETERS[17] = "feedbacklevel";
-        PARAMETERS[18] = "noiseon";
-        PARAMETERS[19] = "noiselevel";
+        PARAMETERS[16] = "feedbacklevel";
+        PARAMETERS[17] = "feedbackon";
+        PARAMETERS[18] = "noiselevel";
+        PARAMETERS[19] = "noiseon";
         PARAMETERS[20] = "noisetype";
         PARAMETERS[22] = "glideon";
         PARAMETERS[23] = "glidemode";
         PARAMETERS[24] = "gliderate";
         PARAMETERS[25] = "pitchbendrange";
-        PARAMETERS[26] = "filtercutoff";    // 0-1023, 2-byte: high bits in PARAMETERS[27]
+        PARAMETERS[26] = "filtercutoff";    // 0-1023, 2-byte big-endian: low bits in PARAMETERS[27]
         PARAMETERS[28] = "filterres";       // 0-255
-        PARAMETERS[29] = "filterkeytrack";
-        PARAMETERS[30] = "filterkeyamt";
+        PARAMETERS[29] = "filterkeyamt";
+        PARAMETERS[30] = "filterkeytrack";
         PARAMETERS[32] = "lfosync";
         PARAMETERS[33] = "lfofreq";         // 0-255
         PARAMETERS[34] = "lfofreqsync";     // 0-15
@@ -102,30 +113,30 @@ public class SequentialFourm extends Synth
         PARAMETERS[40] = "ampenvattack";    // 0-255
         PARAMETERS[41] = "filtenvdecay";    // 0-255
         PARAMETERS[42] = "ampenvdecay";     // 0-255
-        PARAMETERS[43] = "filtenvsustain";  // 0-127
+        PARAMETERS[43] = "filtenvrelease";  // 0-255
         PARAMETERS[44] = "ampenvsustain";   // 0-127
-        PARAMETERS[45] = "filtenvrelease";  // 0-255
+        PARAMETERS[45] = "filtenvsustain";  // 0-127
         PARAMETERS[46] = "ampenvrelease";   // 0-255
-        PARAMETERS[47] = "filtenvvelon";
+        PARAMETERS[47] = "filtenvamt";
         PARAMETERS[48] = "ampenvvelon";
-        PARAMETERS[49] = "filtenvvelamt";
+        PARAMETERS[49] = "envretrig";
         PARAMETERS[50] = "ampenvvelamt";
-        PARAMETERS[51] = "envretrig";
-        PARAMETERS[52] = "filtenvamt";      // 0-255
+        PARAMETERS[51] = "filtenvvelamt";
+        PARAMETERS[52] = "filtenvvelon";
         PARAMETERS[53] = "ampenvamt";       // 0-255
         PARAMETERS[55] = "voicevolume";
         PARAMETERS[56] = "vintage";
-        PARAMETERS[57] = "unisonon";
-        PARAMETERS[58] = "unisonvoices";
-        PARAMETERS[59] = "unisondetune";
+        PARAMETERS[57] = "unisondetune";
+        PARAMETERS[58] = "unisonon";
+        PARAMETERS[59] = "unisonvoices";
         PARAMETERS[60] = "unisonnote1";
         PARAMETERS[61] = "unisonnote2";
         PARAMETERS[62] = "unisonnote3";
         PARAMETERS[63] = "unisonnote4";
-        PARAMETERS[64] = "modsrcfiltenvroute";
+        PARAMETERS[64] = "modsrcfiltenvamt";
         PARAMETERS[65] = "modsrcoscbroute";
         PARAMETERS[66] = "modsrclforoute";
-        PARAMETERS[67] = "modsrcfiltenvamt";  // 0-254
+        PARAMETERS[67] = "modsrcfiltenvroute";
         PARAMETERS[68] = "modsrcoscbamt";     // 0-254
         PARAMETERS[69] = "modsrclfoamt";      // 0-254
         PARAMETERS[70] = "modsrcatamt";       // 0-254
@@ -143,14 +154,14 @@ public class SequentialFourm extends Synth
         PARAMETERS[82] = "keymode";
         PARAMETERS[83] = "scale";           // 0-65
         PARAMETERS[84] = "transpose";       // 0-4
-        PARAMETERS[85] = "category";        // 0-16
-        PARAMETERS[86] = "clockbpm";        // 30-250
-        PARAMETERS[87] = "clockdiv";        // 0-10
+        PARAMETERS[85] = "category";        // 0-15
+        PARAMETERS[86] = "clockdiv";        // 0-10
+        PARAMETERS[87] = "clockbpm";        // 30-250
         // [88-107]: name bytes, handled separately
         // [108]: editor byte, skip
         PARAMETERS[109] = "arpon";
-        PARAMETERS[110] = "arpmode";
-        PARAMETERS[111] = "arprange";
+        PARAMETERS[110] = "arprange";
+        PARAMETERS[111] = "arpmode";
         PARAMETERS[112] = "arprepeat";
         PARAMETERS[113] = "arprelatch";
         PARAMETERS[114] = "arpbeatsync";
@@ -179,17 +190,35 @@ public class SequentialFourm extends Synth
                 PARAMETERS_MAP.put(PARAMETERS[i], i);
         }
 
+    // ---- Parameters that only occupy the low bits of their byte (see FOURM.md) ----
+    // The high bits hold an unidentified value; preserved round-trip in a shadow
+    // "<key>hibits" model key rather than discarded.
+    static final HashMap<String, Integer> MASKED_PARAMS = new HashMap<>();
+    static
+        {
+        MASKED_PARAMS.put("osc1sync", 0x01);
+        MASKED_PARAMS.put("arpon", 0x01);
+        MASKED_PARAMS.put("lforevsaw", 0x01);
+        MASKED_PARAMS.put("noisetype", 0x03);
+        MASKED_PARAMS.put("moddstfreqasrc", 0x03);
+        MASKED_PARAMS.put("seqplaymode", 0x03);
+        MASKED_PARAMS.put("pitchbendrange", 0x0F);
+        MASKED_PARAMS.put("lfofreqsync", 0x0F);
+        }
+
     // ---- Constructor ----
 
     public SequentialFourm()
         {
         SynthPanel globalPanel = new SynthPanel(this);
+        globalPanel.makePasteable("global");
         VBox vbox = new VBox();
         vbox.add(buildGlobalPanel(Style.COLOR_GLOBAL()));
         globalPanel.add(vbox, BorderLayout.CENTER);
         addTab("Global", globalPanel);
 
         SynthPanel oscPanel = new SynthPanel(this);
+        oscPanel.makePasteable("osc");
         vbox = new VBox();
         HBox hbox = new HBox();
         hbox.add(buildOsc1Panel(Style.COLOR_A()));
@@ -203,6 +232,7 @@ public class SequentialFourm extends Synth
         addTab("Oscillators", oscPanel);
 
         SynthPanel filtPanel = new SynthPanel(this);
+        filtPanel.makePasteable("filt");
         vbox = new VBox();
         hbox = new HBox();
         hbox.add(buildFilterPanel(Style.COLOR_B()));
@@ -212,6 +242,7 @@ public class SequentialFourm extends Synth
         addTab("Filter", filtPanel);
 
         SynthPanel envPanel = new SynthPanel(this);
+        envPanel.makePasteable("env");
         vbox = new VBox();
         hbox = new HBox();
         hbox.add(buildAmpEnvPanel(Style.COLOR_C()));
@@ -221,12 +252,14 @@ public class SequentialFourm extends Synth
         addTab("Envelope + LFO", envPanel);
 
         SynthPanel modPanel = new SynthPanel(this);
+        modPanel.makePasteable("mod");
         vbox = new VBox();
         vbox.add(buildModPanel(Style.COLOR_C()));
         modPanel.add(vbox, BorderLayout.CENTER);
         addTab("Modulation", modPanel);
 
         SynthPanel arpPanel = new SynthPanel(this);
+        arpPanel.makePasteable("arp");
         vbox = new VBox();
         hbox = new HBox();
         hbox.add(buildArpPanel(Style.COLOR_A()));
@@ -238,9 +271,20 @@ public class SequentialFourm extends Synth
         arpPanel.add(vbox, BorderLayout.CENTER);
         addTab("Arp / Voice", arpPanel);
 
+        for (int t = 1; t <= 4; t++)
+            {
+            SynthPanel seqPanel = new SynthPanel(this);
+            seqPanel.makePasteable("seq" + t);
+            VBox vbox2 = new VBox();
+            vbox2.addLast(buildSeqTrackPanel(t));
+            seqPanel.add(vbox2, BorderLayout.CENTER);
+            addTab("Seq " + t, seqPanel);
+            }
+
         model.set("name", "Init");
         model.set("bank", 0);
         model.set("number", 0);
+        loadDefaults();
         }
 
     // ---- Panel builders ----
@@ -248,6 +292,7 @@ public class SequentialFourm extends Synth
     JComponent buildGlobalPanel(Color color)
         {
         Category category = new Category(this, "Sequential Fourm", color);
+        category.makePasteable("global");
         HBox hbox = new HBox();
         VBox vbox = new VBox();
 
@@ -287,6 +332,7 @@ public class SequentialFourm extends Synth
     JComponent buildOsc1Panel(Color color)
         {
         Category category = new Category(this, "Oscillator 1", color);
+        category.makePasteable("osc1");
         HBox hbox = new HBox();
 
         JComponent comp = new LabelledDial("Octave", this, "osc1octave", color, 0, 4);
@@ -314,6 +360,7 @@ public class SequentialFourm extends Synth
     JComponent buildOsc2Panel(Color color)
         {
         Category category = new Category(this, "Oscillator 2", color);
+        category.makePasteable("osc2");
         HBox hbox = new HBox();
 
         JComponent comp = new LabelledDial("Octave", this, "osc2octave", color, 0, 6);
@@ -341,6 +388,7 @@ public class SequentialFourm extends Synth
     JComponent buildMixPanel(Color color)
         {
         Category category = new Category(this, "Mix", color);
+        category.makePasteable("mix");
         HBox hbox = new HBox();
 
         VBox vbox = new VBox();
@@ -366,6 +414,7 @@ public class SequentialFourm extends Synth
     JComponent buildGlidePanel(Color color)
         {
         Category category = new Category(this, "Glide", color);
+        category.makePasteable("glide");
         HBox hbox = new HBox();
 
         VBox vbox = new VBox();
@@ -386,13 +435,14 @@ public class SequentialFourm extends Synth
     JComponent buildFilterPanel(Color color)
         {
         Category category = new Category(this, "Filter", color);
+        category.makePasteable("filt");
         HBox hbox = new HBox();
 
         JComponent comp = new LabelledDial("Cutoff", this, "filtercutoff", color, 0, 1023);
         hbox.add(comp);
         comp = new LabelledDial("Resonance", this, "filterres", color, 0, 255);
         hbox.add(comp);
-        comp = new LabelledDial("Key Amt", this, "filterkeyamt", color, 0, 127);
+        comp = new LabelledDial("Key Amt", this, "filterkeyamt", color, 0, 255);
         hbox.add(comp);
 
         VBox vbox = new VBox();
@@ -407,6 +457,7 @@ public class SequentialFourm extends Synth
     JComponent buildFilterEnvPanel(Color color)
         {
         Category category = new Category(this, "Filter Envelope", color);
+        category.makePasteable("filtenv");
         HBox hbox = new HBox();
 
         JComponent comp = new LabelledDial("Attack", this, "filtenvattack", color, 0, 255);
@@ -436,6 +487,7 @@ public class SequentialFourm extends Synth
     JComponent buildAmpEnvPanel(Color color)
         {
         Category category = new Category(this, "Amp Envelope", color);
+        category.makePasteable("ampenv");
         HBox hbox = new HBox();
 
         JComponent comp = new LabelledDial("Attack", this, "ampenvattack", color, 0, 255);
@@ -463,6 +515,7 @@ public class SequentialFourm extends Synth
     JComponent buildLFOPanel(Color color)
         {
         Category category = new Category(this, "LFO", color);
+        category.makePasteable("lfo");
         HBox hbox = new HBox();
 
         JComponent comp = new LabelledDial("Freq", this, "lfofreq", color, 0, 255);
@@ -488,6 +541,7 @@ public class SequentialFourm extends Synth
     JComponent buildModPanel(Color color)
         {
         Category category = new Category(this, "Modulation", color);
+        category.makePasteable("mod");
         HBox hbox = new HBox();
 
         // Mod sources
@@ -565,6 +619,7 @@ public class SequentialFourm extends Synth
     JComponent buildArpPanel(Color color)
         {
         Category category = new Category(this, "Arpeggiator", color);
+        category.makePasteable("arp");
         HBox hbox = new HBox();
 
         VBox vbox = new VBox();
@@ -590,6 +645,7 @@ public class SequentialFourm extends Synth
     JComponent buildSeqControlPanel(Color color)
         {
         Category category = new Category(this, "Sequencer", color);
+        category.makePasteable("seqctrl");
         HBox hbox = new HBox();
 
         VBox vbox = new VBox();
@@ -609,6 +665,7 @@ public class SequentialFourm extends Synth
     JComponent buildUnisonPanel(Color color)
         {
         Category category = new Category(this, "Voice", color);
+        category.makePasteable("voice");
         HBox hbox = new HBox();
 
         VBox vbox = new VBox();
@@ -620,16 +677,83 @@ public class SequentialFourm extends Synth
         hbox.add(comp);
         comp = new LabelledDial("Detune", this, "unisondetune", color, 0, 127);
         hbox.add(comp);
-        comp = new LabelledDial("Note 1", this, "unisonnote1", color, 0, 60);
+        comp = new LabelledDial("Note 1", this, "unisonnote1", color, 0, 127) { public String map(int val) { return val == 127 ? "Off" : "" + val; } };
         hbox.add(comp);
-        comp = new LabelledDial("Note 2", this, "unisonnote2", color, 0, 60);
+        comp = new LabelledDial("Note 2", this, "unisonnote2", color, 0, 127) { public String map(int val) { return val == 127 ? "Off" : "" + val; } };
         hbox.add(comp);
-        comp = new LabelledDial("Note 3", this, "unisonnote3", color, 0, 60);
+        comp = new LabelledDial("Note 3", this, "unisonnote3", color, 0, 127) { public String map(int val) { return val == 127 ? "Off" : "" + val; } };
         hbox.add(comp);
-        comp = new LabelledDial("Note 4", this, "unisonnote4", color, 0, 60);
+        comp = new LabelledDial("Note 4", this, "unisonnote4", color, 0, 127) { public String map(int val) { return val == 127 ? "Off" : "" + val; } };
         hbox.add(comp);
         comp = new Chooser("Key Mode", this, "keymode", KEY_MODES);
         hbox.addLast(comp);
+
+        category.add(hbox, BorderLayout.WEST);
+        return category;
+        }
+
+    // ---- Sequencer step editor ----
+
+    JComponent buildSeqTrackPanel(final int track)
+        {
+        final JComponent typical = buildSeqStep(track, 1, Style.COLOR_A());
+        final int stepH = typical.getPreferredSize().height;
+
+        VBox steps = new VBox()
+            {
+            public Dimension getPreferredScrollableViewportSize()
+                {
+                Dimension size = getPreferredSize();
+                size.height = stepH * 4;
+                return size;
+                }
+            };
+
+        for (int s = 1; s <= 64; s++)
+            steps.add(buildSeqStep(track, s, (s % 2 == 1 ? Style.COLOR_A() : Style.COLOR_B())));
+
+        JScrollPane pane = new JScrollPane(steps,
+            ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+            ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        pane.getViewport().setBackground(Style.BACKGROUND_COLOR());
+        pane.setBorder(null);
+        return pane;
+        }
+
+    JComponent buildSeqStep(int track, int step, Color color)
+        {
+        Category category = new Category(this, "Step " + step, color);
+        category.makePasteable("seq" + track);
+        category.makeDistributable("seq" + track);
+        HBox hbox = new HBox();
+
+        JComponent comp = new LabelledDial("Note", this, "seq" + track + "note" + step, color, 0, 128)
+            {
+            public String map(int val)
+                {
+                if (val == 128) return "Off";
+                return NOTES[val % 12] + " " + ((val / 12) - 2);
+                }
+            };
+        hbox.add(comp);
+
+        comp = new LabelledDial("Velocity", this, "seq" + track + "vel" + step, color, 0, 128)
+            {
+            public String map(int val)
+                {
+                return val == 128 ? "Off" : "" + val;
+                }
+            };
+        hbox.add(comp);
+
+        VBox vbox = new VBox();
+        comp = new CheckBox("Rest", this, "seq" + track + "stepr" + step);
+        vbox.add(comp);
+        comp = new CheckBox("Tie", this, "seq" + track + "stept" + step);
+        vbox.add(comp);
+        comp = new CheckBox("Glide", this, "seq" + track + "stepg" + step);
+        vbox.add(comp);
+        hbox.addLast(vbox);
 
         category.add(hbox, BorderLayout.WEST);
         return category;
@@ -763,18 +887,33 @@ public class SequentialFourm extends Synth
         for (int i = 0; i < Math.min(NRPN_COUNT, raw.length); i++)
             {
             String key = PARAMETERS[i];
-            if (key.equals("---") || key.equals("osc1freq") || key.equals("osc2freq") || key.equals("filtercutoff"))
+            if (key.equals("---") || key.equals("osc1freq") || key.equals("osc2freq") || key.equals("filtercutoff") ||
+                MASKED_PARAMS.get(key) != null)
                 continue;
             model.set(key, raw[i] & 0xFF);
             }
 
-        // Multi-byte parameters (little-endian 16-bit)
+        // Multi-byte parameters (big-endian 16-bit: verified against a hardware bulk dump,
+        // where the little-endian reading put nearly every real patch's value out of range)
         if (raw.length > 3)
-            model.set("osc1freq", Math.min((raw[2] & 0xFF) | ((raw[3] & 0xFF) << 8), 1400));
+            model.set("osc1freq", Math.min(((raw[2] & 0xFF) << 8) | (raw[3] & 0xFF), 1400));
         if (raw.length > 5)
-            model.set("osc2freq", Math.min((raw[4] & 0xFF) | ((raw[5] & 0xFF) << 8), 1400));
+            model.set("osc2freq", Math.min(((raw[4] & 0xFF) << 8) | (raw[5] & 0xFF), 1400));
         if (raw.length > 27)
-            model.set("filtercutoff", Math.min((raw[26] & 0xFF) | ((raw[27] & 0xFF) << 8), 1023));
+            model.set("filtercutoff", Math.min(((raw[26] & 0xFF) << 8) | (raw[27] & 0xFF), 1023));
+
+        // Parameters that only occupy the low bits of their byte (see MASKED_PARAMS)
+        for (String key : MASKED_PARAMS.keySet())
+            {
+            int idx = PARAMETERS_MAP.get(key);
+            if (idx < raw.length)
+                {
+                int mask = MASKED_PARAMS.get(key);
+                int rawByte = raw[idx] & 0xFF;
+                model.set(key, rawByte & mask);
+                model.set(key + "hibits", rawByte & ~mask & 0xFF);
+                }
+            }
 
         // Name
         if (raw.length >= NAME_OFFSET + NAME_LENGTH)
@@ -788,6 +927,22 @@ public class SequentialFourm extends Synth
         // Remaining bytes beyond the NRPN table
         for (int i = NRPN_COUNT; i < raw.length; i++)
             model.set("b" + i, raw[i] & 0xFF);
+
+        // Expand rest/tie/glide byte keys into per-step boolean keys for the UI
+        for (int t = 1; t <= 4; t++)
+            for (int n = 1; n <= 8; n++)
+                {
+                int r  = model.get("seq" + t + "rest"  + n, 0);
+                int ti = model.get("seq" + t + "tie"   + n, 0);
+                int g  = model.get("seq" + t + "glide" + n, 0);
+                for (int b = 0; b < 8; b++)
+                    {
+                    int s = (n - 1) * 8 + b + 1;
+                    model.set("seq" + t + "stepr" + s, (r  >> b) & 1);
+                    model.set("seq" + t + "stept" + s, (ti >> b) & 1);
+                    model.set("seq" + t + "stepg" + s, (g  >> b) & 1);
+                    }
+                }
 
         revise();
         return PARSE_SUCCEEDED;
@@ -803,18 +958,27 @@ public class SequentialFourm extends Synth
         for (int i = 0; i < NRPN_COUNT; i++)
             {
             String key = PARAMETERS[i];
-            if (key.equals("---") || key.equals("osc1freq") || key.equals("osc2freq") || key.equals("filtercutoff"))
+            if (key.equals("---") || key.equals("osc1freq") || key.equals("osc2freq") || key.equals("filtercutoff") ||
+                MASKED_PARAMS.get(key) != null)
                 continue;
             raw[i] = (byte)(model.get(key, 0) & 0xFF);
             }
 
-        // Multi-byte parameters
+        // Parameters that only occupy the low bits of their byte (see MASKED_PARAMS / parse())
+        for (String key : MASKED_PARAMS.keySet())
+            {
+            int idx = PARAMETERS_MAP.get(key);
+            int mask = MASKED_PARAMS.get(key);
+            raw[idx] = (byte)((model.get(key, 0) & mask) | (model.get(key + "hibits", 0) & ~mask & 0xFF));
+            }
+
+        // Multi-byte parameters (big-endian 16-bit, see parse())
         int v = model.get("osc1freq", 0);
-        raw[2] = (byte)(v & 0xFF);  raw[3] = (byte)((v >> 8) & 0xFF);
+        raw[2] = (byte)((v >> 8) & 0xFF); raw[3] = (byte)(v & 0xFF);
         v = model.get("osc2freq", 0);
-        raw[4] = (byte)(v & 0xFF);  raw[5] = (byte)((v >> 8) & 0xFF);
+        raw[4] = (byte)((v >> 8) & 0xFF); raw[5] = (byte)(v & 0xFF);
         v = model.get("filtercutoff", 0);
-        raw[26] = (byte)(v & 0xFF); raw[27] = (byte)((v >> 8) & 0xFF);
+        raw[26] = (byte)((v >> 8) & 0xFF); raw[27] = (byte)(v & 0xFF);
 
         // Name
         String name = (model.get("name", "Init") + "                    ").substring(0, NAME_LENGTH);
@@ -864,8 +1028,40 @@ public class SequentialFourm extends Synth
             return ret;
             }
 
+        // Step-level rest/tie/glide flags: pack into the byte key and emit that NRPN
+        if (key.startsWith("seq"))
+            {
+            String flagType = null, stepType = null;
+            if (key.indexOf("stepr") >= 0)      { flagType = "rest";  stepType = "stepr"; }
+            else if (key.indexOf("stept") >= 0) { flagType = "tie";   stepType = "stept"; }
+            else if (key.indexOf("stepg") >= 0) { flagType = "glide"; stepType = "stepg"; }
+            if (flagType != null)
+                {
+                int t = key.charAt(3) - '0';
+                int s = Integer.parseInt(key.substring(4 + stepType.length()));
+                int n = (s - 1) / 8 + 1;
+                int byteVal = 0;
+                for (int b = 0; b < 8; b++)
+                    byteVal |= (model.get("seq" + t + stepType + ((n - 1) * 8 + b + 1), 0) & 1) << b;
+                String byteKey = "seq" + t + flagType + n;
+                boolean midi = getSendMIDI();
+                setSendMIDI(false);
+                model.set(byteKey, byteVal);
+                setSendMIDI(midi);
+                Integer bidx = PARAMETERS_MAP.get(byteKey);
+                return bidx != null ? buildNRPN(getChannelOut(), bidx + 1, byteVal) : new Object[0];
+                }
+            }
+
         Integer idx = PARAMETERS_MAP.get(key);
         if (idx == null) return new Object[0];
+
+        Integer mask = MASKED_PARAMS.get(key);
+        if (mask != null)
+            {
+            int byteVal = (model.get(key, 0) & mask) | (model.get(key + "hibits", 0) & ~mask & 0xFF);
+            return buildNRPN(getChannelOut(), idx + 1, byteVal);
+            }
 
         return buildNRPN(getChannelOut(), idx + 1, model.get(key, 0));
         }
@@ -887,7 +1083,31 @@ public class SequentialFourm extends Synth
             {
             String key = PARAMETERS[nrpn - 1];
             if (!key.equals("---"))
+                {
+                Integer mask = MASKED_PARAMS.get(key);
+                if (mask != null)
+                    {
+                    model.set(key, data.value & mask);
+                    model.set(key + "hibits", data.value & ~mask & 0xFF);
+                    return;
+                    }
                 model.set(key, data.value);
+                // Unpack rest/tie/glide bytes to per-step keys
+                String flagType = null, stepType = null;
+                if (key.indexOf("rest") > 0)        { flagType = "rest";  stepType = "stepr"; }
+                else if (key.indexOf("tie") > 0)    { flagType = "tie";   stepType = "stept"; }
+                else if (key.indexOf("glide") > 0)  { flagType = "glide"; stepType = "stepg"; }
+                if (flagType != null)
+                    {
+                    int t = key.charAt(3) - '0';
+                    int n = Integer.parseInt(key.substring(4 + flagType.length()));
+                    boolean midi = getSendMIDI();
+                    setSendMIDI(false);
+                    for (int b = 0; b < 8; b++)
+                        model.set("seq" + t + stepType + ((n - 1) * 8 + b + 1), (data.value >> b) & 1);
+                    setSendMIDI(midi);
+                    }
+                }
             }
         }
 
@@ -901,7 +1121,7 @@ public class SequentialFourm extends Synth
     public boolean librarianTested() { return true; }
 
     public static String getSynthName() { return "Sequential Fourm"; }
-    public String getDefaultResourceFileName() { return null; }
+    public String getDefaultResourceFileName() { return "SequentialFourm.init"; }
     public String getHTMLResourceFileName() { return "SequentialFourm.html"; }
 
     // ---- Pack/unpack (Sequential "packed MS bit" format) ----

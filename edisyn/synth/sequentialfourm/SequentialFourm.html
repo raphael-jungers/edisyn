@@ -19,17 +19,24 @@
   <li><b>Envelope + LFO</b> – Amp envelope and LFO parameters</li>
   <li><b>Modulation</b> – Mod source routing and destination assignments</li>
   <li><b>Arp / Voice</b> – Arpeggiator, sequencer controls, unison, key mode</li>
+  <li><b>Seq 1 – Seq 4</b> – Step editor for each sequencer track (64 steps each)</li>
 </ul>
 
 <h3>Sequencer</h3>
-<p>Sequencer step data (4 tracks &times; 64 steps, rest/tie/glide flags) is preserved
-across save/load and synth upload/download, but step-level editing is not yet implemented.
-Use the Fourm's front panel to program sequences; the editor will faithfully store and
-restore them.</p>
+<p>Each of the four sequencer tracks has its own tab. Scroll vertically to access all 64 steps.
+Per step: note (displayed as note name), velocity, and Rest/Tie/Glide checkboxes.</p>
 
 <h3>Notes on Display Values</h3>
-<p>Some parameter display values (LFO shape, scale names, category names) are approximations
-based on the MIDI implementation document. Verify against the Fourm's front panel.</p>
+<p>Most parameter names and ranges have been verified against a 512-patch hardware dump and
+the official Fourm User Guide. A few are still unconfirmed and may show an inaccurate label
+or an "Off"-mapped value if your patch uses them:</p>
+<ul>
+  <li><b>Key Mode</b> – this parameter's meaning and option names aren't documented anywhere
+  we could find; the current label guesses may be wrong</li>
+  <li><b>Noise Type</b> – a 4th value exists beyond the three documented types (White/Pink/Violet)</li>
+  <li><b>Clock Div</b> – some patches use values beyond the 11 divisions either Sequential
+  document lists, possibly added in a firmware update</li>
+</ul>
 
 <h3>SysEx</h3>
 <ul>
